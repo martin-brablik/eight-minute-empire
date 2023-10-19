@@ -1,0 +1,3 @@
+vytvořit array karet (RectTransform)
+podle indexu karty updatovat grafiku nové karty
+refaktor kódu
