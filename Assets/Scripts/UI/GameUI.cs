@@ -1,14 +1,9 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.Events;
 using System;
-using System.Threading.Tasks;
 using System.Linq;
-using UnityEditor.ShaderGraph;
-using Unity.VisualScripting;
+using System.Collections.Generic;
 
 public class GameUI : MonoBehaviour
 {
@@ -25,7 +20,7 @@ public class GameUI : MonoBehaviour
 	[SerializeField] private RectTransform _cardHolder;
 
 	[SerializeField] private RectTransform _playerPanel;
-	[SerializeField] private RectTransform _playerHolder;
+	[SerializeField] private RectTransform _prefabPlayerHolder;
 
 	[SerializeField] private GameObject _cover;
 	[SerializeField] private GameObject _selectAction;
@@ -33,17 +28,19 @@ public class GameUI : MonoBehaviour
     [SerializeField] private Transform _board;
 
     private GameController _controller;
+	private PlayerHolder[] _playerHolders;
 
 	private Color _colorSourceLandSelected = new Color(1, 0.96470588235294117647058823529412f, 0.56078431372549019607843137254902f);
     private Color _colorTargetLandSelected = new Color(0.62745098039215686274509803921569f, 1, 0.56078431372549019607843137254902f);
 
-    private delegate void LoadData<T>(T data, RectTransform obj);
+    private delegate void DataLoader<T>(T data, RectTransform obj);
 
 	public Transform Lands;
 
 	private void Awake()
 	{
 		_controller = GetComponent<GameController>();
+		_playerHolders = new PlayerHolder[_controller.Players.Length];
 
         Lands = MapLoader.DrawMap(_controller.GameMap, _board);
         var landObjs = Lands.Cast<Transform>().ToArray();
@@ -66,12 +63,22 @@ public class GameUI : MonoBehaviour
 		_inBiddingAmount.text = "";
 	}
 
-	private void DrawArray<T>(T[] objects, float startingHeight, float heightDifference, RectTransform prefab, RectTransform panel, LoadData<T> loadData)
+	private void DrawArray<T>(T[] objects, float startingHeight, float heightDifference, RectTransform prefab, RectTransform panel, DataLoader<T> loadData)
 	{
 		for(var i = 0; i < objects.Length; i++)
 		{
 			var obj = instantiateObject(i);
 			loadData(objects[i], obj);
+
+			if(typeof(T) == typeof(Player))
+			{
+				_playerHolders[i] = new PlayerHolder(objects[i] as Player);
+				_playerHolders[i].Score = obj.GetChild(0).GetChild(0).GetComponent<TMP_Text>();
+				_playerHolders[i].Name = obj.GetChild(1).GetComponent<TMP_Text>();
+                _playerHolders[i].Cities = obj.GetChild(2).GetChild(1).GetComponent<TMP_Text>();
+				_playerHolders[i].Armies = obj.GetChild(2).GetChild(3).GetComponent<TMP_Text>();
+                _playerHolders[i].Coins = obj.GetChild(2).GetChild(5).GetComponent<TMP_Text>();
+            }
 		}
 
 		RectTransform instantiateObject(int index)
@@ -88,28 +95,61 @@ public class GameUI : MonoBehaviour
 		}
 	}
 
+	private KeyValuePair<T, RectTransform> DrawObject<T>(T instance, float height, RectTransform prefab, RectTransform panel, DataLoader<T> loadData)
+	{
+        var instanceObj = Instantiate(prefab, panel);
+
+        if (typeof(T) == typeof(Card))
+            instanceObj.GetChild(1).GetComponent<Button>().onClick.AddListener(delegate { CallbackCardClick(instance as Card); });
+
+        instanceObj.anchoredPosition = new Vector2(0, height);
+		loadData(instance, instanceObj);
+		return new KeyValuePair<T, RectTransform>(instance, instanceObj);
+    }
+
+	private Dictionary<T, RectTransform> DrawObjects<T>(T[] objects, float startingHeight, float heightDifference, RectTransform prefab, RectTransform panel, DataLoader<T> loadData)
+	{
+		var result = new Dictionary<T, RectTransform>();
+
+		for(var i = 0; i < objects.Length; i++)
+		{
+			var objPair = DrawObject<T>(objects[i], startingHeight - i * heightDifference, prefab, panel, loadData);
+			var key = objPair.Key;
+			var value = objPair.Value;
+
+			result.Add(key, value);
+        }
+
+		return result;
+	}
+
 	private void LoadCardGraphics(Card card, RectTransform cardObj)
 	{
 		var price = cardObj.GetChild(0).GetChild(0).GetComponent<TMP_Text>();
 		var resourceIcon = cardObj.GetChild(1).GetChild(0).GetComponent<Image>();
-		Image[] cardActions = new Image[card.CardActions.Length];
+		Transform[] cardActions = new Transform[card.CardActions.Length];
 
 		price.text = card.Price.ToString();
 		resourceIcon.sprite = _spriteResource[(int)card.Resource];
 
-        cardActions[0] = cardObj.GetChild(1).GetChild(1).GetComponent<Image>();
+        cardActions[0] = cardObj.GetChild(1).GetChild(1);
 
         if (card.CardActions.Length > 1)
 		{
-            cardActions[0] = cardObj.GetChild(1).GetChild(2).GetChild(0).GetComponent<Image>();
-            cardActions[1] = cardObj.GetChild(1).GetChild(2).GetChild(1).GetComponent<Image>();
+            cardActions[0] = cardObj.GetChild(1).GetChild(2).GetChild(0);
+            cardActions[1] = cardObj.GetChild(1).GetChild(2).GetChild(1);
 
 			cardObj.GetChild(1).GetChild(1).gameObject.SetActive(false);
 			cardObj.GetChild(1).GetChild(2).gameObject.SetActive(true);
 		}
 
 		for(var i = 0; i < cardActions.Length; i++)
-			cardActions[i].sprite = _spriteAction[card.CardActions[i].Index];
+		{
+            cardActions[i].GetComponent<Image>().sprite = _spriteAction[card.CardActions[i].Index];
+
+			if (card.CardActions[i].Count > 1)
+				cardActions[i].GetChild(0).GetComponent<TMP_Text>().text = card.CardActions[i].Count.ToString();
+        }		
 	}
 
 	private void LoadPlayerStats(Player player, RectTransform playerObj)
@@ -139,6 +179,30 @@ public class GameUI : MonoBehaviour
 		_cover.SetActive(state);
 	}
 
+	public void UpdatePlayerStat(Player player, Player.Stat stat, string value)
+	{
+		var playerHolder = _playerHolders.FirstOrDefault((ph) => ph.Player == player);
+
+		switch(stat)
+		{
+			case Player.Stat.NAME:
+				playerHolder.Name.text = value;
+				break;
+            case Player.Stat.SCORE:
+                playerHolder.Score.text = value;
+                break;
+            case Player.Stat.CITIES:
+                playerHolder.Cities.text = value;
+                break;
+            case Player.Stat.ARMIES:
+                playerHolder.Armies.text = value;
+                break;
+            case Player.Stat.COINS:
+                playerHolder.Coins.text = value;
+                break;
+        }
+	}
+
 	public void ToggleSelectAction(CardAction action1, CardAction action2)
 	{
         if (action1 is not null && action2 is not null)
@@ -152,7 +216,7 @@ public class GameUI : MonoBehaviour
             {
 				Cover(false);
 				_controller.ToggleControls(true);
-                _controller.CurrentPlayersMove.action = action1;
+                _controller.GetCurrentPlayersMove().Action = action1;
                 _controller.InitiateSelectingStage(1);
 				_selectAction.SetActive(false);
             });
@@ -161,7 +225,7 @@ public class GameUI : MonoBehaviour
 			{
 				Cover(false);
 				_controller.ToggleControls(true);
-				_controller.CurrentPlayersMove.action = action2;
+				_controller.GetCurrentPlayersMove().Action = action2;
 				_controller.InitiateSelectingStage(1);
 				_selectAction.SetActive(false);
 			});
@@ -177,15 +241,24 @@ public class GameUI : MonoBehaviour
 		selectedLand.LandObj.color = isTarget ? _colorTargetLandSelected : _colorSourceLandSelected;
 	}
 
-	public void DrawPlayers(Player[] players)
-	{
-		DrawArray<Player>(players, 0f, 92f, _playerHolder, _playerPanel, LoadPlayerStats);
-	}
+    public void DrawPlayers(Player[] players)
+    {
+		var playerPairs = DrawObjects<Player>(players, 0f, 92f, _prefabPlayerHolder, _playerPanel, LoadPlayerStats);
 
+		for(var i = 0; i < players.Length; i++)
+		{
+			_playerHolders[i] = new PlayerHolder(players[i]);
+            _playerHolders[i].Score = playerPairs[players[i]].GetChild(0).GetChild(0).GetComponent<TMP_Text>();
+            _playerHolders[i].Name = playerPairs[players[i]].GetChild(1).GetComponent<TMP_Text>();
+            _playerHolders[i].Cities = playerPairs[players[i]].GetChild(2).GetChild(1).GetComponent<TMP_Text>();
+            _playerHolders[i].Armies = playerPairs[players[i]].GetChild(2).GetChild(3).GetComponent<TMP_Text>();
+            _playerHolders[i].Coins = playerPairs[players[i]].GetChild(2).GetChild(5).GetComponent<TMP_Text>();
+        }
+    }
 
 	public void DrawCards(Card[] cards)
 	{
-		DrawArray<Card>(cards, 400.42f, 160.17f, _cardHolder, _cardPanel, LoadCardGraphics);
+		DrawObjects<Card>(cards, 400.42f, 160.17f, _cardHolder, _cardPanel, LoadCardGraphics);
 	}
 
 	public void CallbackBiddingConfirm()
@@ -201,18 +274,18 @@ public class GameUI : MonoBehaviour
 				return;
 			}
 
-			_controller.Bids.Add(_controller.ActivePlayer, bid);
+			_controller.WriteBid(_controller.ActivePlayer, bid);
 
 			var nextPlayer = _controller.NextPlayer();
 			print($"now active is player: {nextPlayer.Name}");
 
-			if (_controller.Bids.ContainsKey(nextPlayer))
+			if (_controller.IsBiddingFinished())
 			{
 				_controller.FinishBidding();
 			}
 				
 			else
-				_controller.StartBidding(nextPlayer);
+				_controller.PlaceBid(nextPlayer);
 		}
 		catch(FormatException ex)
 		{

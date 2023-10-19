@@ -5,14 +5,14 @@ public class Card
 	public Resource Resource { get; private set; }
 	public short Price { get; set; }
 	public Player Owner { get; set; }
-	public short Amount { get; set; }
 	public CardAction[] CardActions { get; set; }
+	public int Index { get; set; }
 
-	public Card(Resource resource, CardAction[] cardActions)
+	public Card(Resource resource, CardAction[] cardActions, short price)
 	{
 		Resource = resource;
 		CardActions = cardActions;
-		Price = 0;
+		Price = price;
 	}
 
 	public static void Recruit(Player player, short amount, Land targetLand)

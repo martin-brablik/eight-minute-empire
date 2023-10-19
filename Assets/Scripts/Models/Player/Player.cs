@@ -11,4 +11,6 @@ public abstract class Player
 	public short Coins { get; set; }
 	public Dictionary<Resource, uint> Resources { get; set; }
 	public uint Score { get; private set; }
+
+	public enum Stat { NAME, SCORE, ARMIES, CITIES, COINS }
 }

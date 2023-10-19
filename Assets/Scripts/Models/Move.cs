@@ -4,11 +4,5 @@ using UnityEngine;
 
 public class Move
 {
-    public CardAction action = new CardAction();
-    public short Amount { get; set; }
-
-    public void Play()
-    {
-
-    }
+    public CardAction Action { get; set; }
 }

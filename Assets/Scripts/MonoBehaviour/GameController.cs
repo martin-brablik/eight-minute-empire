@@ -19,8 +19,9 @@ public class GameController : MonoBehaviour
     public Map GameMap { get => Game.GameMap; }
     public Player ActivePlayer { get => _gameLoop.ActivePlayer; }
     public Player[] Players { get => Game.Players; }
-    public Dictionary<Player, short> Bids { get; private set; } = new Dictionary<Player, short>();
-    public Move CurrentPlayersMove { get; private set; }
+
+
+    public delegate object StatSetter(Player player);
 
     private GameController()
     {
@@ -33,46 +34,60 @@ public class GameController : MonoBehaviour
         _gameLoop = GetComponent<GameLoop>();
     }
 
-    public void StartBidding(Player player)
+    public Move GetCurrentPlayersMove() => _gameLoop.CurrentPlayersMove;
+
+    public void PlaceBid(Player player)
     {
         if (player is ComputerPlayer)
-            StartBidding(NextPlayer());
+            PlaceBid(NextPlayer());
 
-        else if (!Bids.ContainsKey(player))
+        else if (!_gameLoop.Bids.ContainsKey(player))
             _view.ShowBiddingScreen(player);
 
         else
             FinishBidding();
     }
 
+    public void WriteBid(Player player, short amount)
+    {
+        _gameLoop.Bids.Add(player, amount); 
+    }
+
+    public Boolean IsBiddingFinished() => _gameLoop.Bids.ContainsKey(ActivePlayer);
+
     public void FinishBidding()
     {
-        var winner = Bids.Aggregate((x, y) => x.Value > y.Value ? x : y).Key;
+        var winner = _gameLoop.Bids.Aggregate((x, y) => x.Value > y.Value ? x : y).Key;
 
         _view.HideBiddingScreen();
         OrderPlayers();
-        UpdatePlayerStat(winner, p => p.Coins -= Bids[p]);
-        CurrentPlayersMove = new Move();
+        UpdatePlayerStat<short>(winner, Player.Stat.COINS, p => p.Coins -= _gameLoop.Bids[p]);
         _gameLoop.EndRound();
         _view.Cover(false);
     }
 
-    public void UpdatePlayerStat(Player player, Action<Player> setter)
+    public void UpdatePlayerStat<T>(Player player, Player.Stat stat, StatSetter setter)
     {
-        setter(player);
+        var value = setter(player);
+        _view.UpdatePlayerStat(player, stat, value.ToString());
     }
 
     public Player NextPlayer()
     {
         var nextPlayer = Game.Players[_gameLoop.NextPlayer()];
 
-        if(CurrentPlayersMove is not null)
-            CurrentPlayersMove.action.sourcePlayer = nextPlayer;
+        if(GetCurrentPlayersMove() is not null && GetCurrentPlayersMove().Action is not null)
+            GetCurrentPlayersMove().Action.sourcePlayer = nextPlayer;
 
         return nextPlayer;
     }
 
-    private Card GenerateCard(System.Random cardGenerator, short cardPrice)
+    public void RegenerateCard(System.Random cardGenerator, short cardPrice, int cardIndex)
+    {
+        
+    }
+
+    public Card GenerateCard(System.Random cardGenerator, short cardPrice)
     {
         var cardResource = (Resource)cardGenerator.Next(0, 5);
         var actionCount = cardGenerator.Next(1, 3);
@@ -80,30 +95,27 @@ public class GameController : MonoBehaviour
 
         for (var i = 0; i < actionCount; i++)
         {
-            var newCardAction = new CardAction();
             var actionIndex = cardGenerator.Next(CardAction.ActionsRegistry.Length);
+            var count =  (short)(actionIndex == 3 ? 1 : cardGenerator.Next(1, 6));
+            var newCardAction = new CardAction(CardAction.ActionsRegistry[actionIndex].Name, actionIndex);
 
+            newCardAction.Count = count;
 
-            newCardAction.Name = CardAction.ActionsRegistry[actionIndex].Name;
-            newCardAction.Index = CardAction.ActionsRegistry[actionIndex].Index;
-
-            cardActions[i] = CardAction.ActionsRegistry[cardGenerator.Next(CardAction.ActionsRegistry.Length)];
+            cardActions[i] = newCardAction;
         }
 
-        var card = new Card(cardResource, cardActions);
-
-        card.Price = cardPrice;
+        var card = new Card(cardResource, cardActions, cardPrice);
         return card;
     }
 
     private Card[] GenerateCards()
     {
         var cardGenerator = new System.Random();
-        var cardSet = new Card[c_cardMaxAmount];
+        var deck = new Card[c_cardMaxAmount];
 
         for (var i = 0; i < c_cardMaxAmount; i++)
         {
-            cardSet[i] = GenerateCard(cardGenerator, i switch
+            var card = GenerateCard(cardGenerator, i switch
             {
                 0 => 0,
                 1 => 1,
@@ -112,14 +124,20 @@ public class GameController : MonoBehaviour
                 4 => 2,
                 5 => 3
             });
+
+            card.Index = i;
+            deck[i] = card;
         }
 
-        return cardSet;
+        return deck;
     }
 
-    public void DealCards()
+    public Card[] DealCards()
     {
-        _view.DrawCards(GenerateCards());
+        var cards = GenerateCards();
+
+        _view.DrawCards(cards);
+        return cards;
     }
 
     public void ToggleControls(bool state)
@@ -130,13 +148,18 @@ public class GameController : MonoBehaviour
 
     public void OrderPlayers()
     {
-        Game.OrderPlayers(this.Bids);
+        Game.OrderPlayers(_gameLoop.Bids);
         _view.DrawPlayers(Game.Players);
     }
 
     public void PickCard(Card card)
     {
-        if(card.CardActions.Length > 1)
+        if (ActivePlayer.Coins < card.Price)
+            return;
+
+        UpdatePlayerStat<short>(ActivePlayer, Player.Stat.COINS, (p) => p.Coins -= card.Price);
+
+        if (card.CardActions.Length > 1)
         {
             _view.Cover(true);
             print("select action");
@@ -145,6 +168,7 @@ public class GameController : MonoBehaviour
         else
         {
             ToggleControls(true);
+            GetCurrentPlayersMove().Action = card.CardActions[0];
             print("select land");
             InitiateSelectingStage(1);
         }
@@ -159,16 +183,25 @@ public class GameController : MonoBehaviour
     public void OnSourceLandSelected(Land selectedLand)
     {
         _view.MarkLandSelected(selectedLand, false);
-        CurrentPlayersMove.action.sourceLand = selectedLand;
-        print("selectedSourceLand: " + selectedLand.Name);
-        print("hello?");
-        print(CurrentPlayersMove.action.Name + " " + CurrentPlayersMove.action.Index);
-        if (CurrentPlayersMove.action.Index == 1 || CurrentPlayersMove.action.Index == 2)
+        var move = GetCurrentPlayersMove();
+        var action = move.Action;
+        var sourceLands = action.sourceLands;
+        sourceLands.Push(selectedLand);
+        GetCurrentPlayersMove().Action.sourceLands.Push(selectedLand);
+
+        print("count: " + GetCurrentPlayersMove().Action.Count);
+        if (GetCurrentPlayersMove().Action.Index == 1 || GetCurrentPlayersMove().Action.Index == 2) // pøesunout armády - vybrat cíl
             InitiateSelectingStage(2);
-        else
+        else if(GetCurrentPlayersMove().Action.Count <= 0) // ostatní akce - vybrat území kterých se akce dotkne
         {
-            ToggleControls(false);
+            //ToggleControls(false);
         }
+        else // postavit mìsto
+        {
+            //ToggleControls(false);
+        }
+
+        GetCurrentPlayersMove().Action.Count--;
     }
 
     public void OnTargetLandSelected(Land selectedLand)
@@ -176,7 +209,7 @@ public class GameController : MonoBehaviour
         ToggleControls(false);
         _view.MarkLandSelected(selectedLand, true);
         print("selectedTargetLand: " + selectedLand.Name);
-        CurrentPlayersMove.action.targetLand = selectedLand;
+        GetCurrentPlayersMove().Action.targetLands.Push(selectedLand);
         _gameLoop.SelectingStage++;
     }
 }

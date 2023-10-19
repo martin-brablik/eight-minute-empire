@@ -13,18 +13,22 @@ public class GameLoop : MonoBehaviour
 	private short _activePlayerIndex { get; set; }
 
 	public Player ActivePlayer { get => _controller.Players[_activePlayerIndex]; }
-	public short SelectingStage = 0;
+	public short SelectingStage { get; set; } = 0;
+    public Move CurrentPlayersMove { get; set; }
+    public Dictionary<Player, short> Bids { get; private set; } = new Dictionary<Player, short>();
+    public Card[] Deck { get; private set; }
 
     private void Awake()
     {
 		_controller = GetComponent<GameController>();
 		_activePlayerIndex = 0;
+		CurrentPlayersMove = new Move();
     }
 
 	private void Start()
 	{
 		PreparePlayers();
-		_controller.DealCards();
+		Deck = _controller.DealCards();
 		_controller.ToggleControls(false);
 		InitiateBidding();
 	}
@@ -60,6 +64,7 @@ public class GameLoop : MonoBehaviour
 				}
 				catch (Exception ex)
 				{
+					print(ex.Message);
 					print(ex.StackTrace);
 				}
 			}
@@ -89,11 +94,11 @@ public class GameLoop : MonoBehaviour
 		{
 			short bid = (short)random.Next(0, 5);
 
-            _controller.Bids.Add(player, bid);
+            Bids.Add(player, bid);
 			print($"{player.Name} {bid}");
 		}
 
-		_controller.StartBidding(ActivePlayer);
+		_controller.PlaceBid(ActivePlayer);
 	}
 
 	public int NextPlayer() => _activePlayerIndex == _controller.Players.Length - 1 ? 0 : ++_activePlayerIndex;
@@ -112,5 +117,15 @@ public class GameLoop : MonoBehaviour
 				2 => 14
 			};
 		}
+	}
+
+	public void PlayTurn(Card card)
+	{
+		//ostatní vìci
+		var cardGenerator = new System.Random();
+		var originalPrice = card.Price;
+		var cardIndex = card.Index;
+
+		//card = _controller.RegenerateCard(cardGenerator, originalPrice, cardIndex);
 	}
 }

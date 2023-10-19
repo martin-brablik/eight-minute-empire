@@ -4,39 +4,28 @@ using UnityEngine;
 
 public class CardAction
 {
-    public string Name { get; set; }
-    public int Index { get; set; }
+    public string Name { get; private set; }
+    public int Index { get; private set; }
     public Player sourcePlayer { get; set; }
     public Player targetPlayer { get; set; }
-    public Land sourceLand { get; set; }
-    public Land targetLand { get; set; }
+    public Stack<Land> sourceLands { get; set; } = new Stack<Land>();
+    public Stack<Land> targetLands { get; set; } = new Stack<Land>();
+    public short Count { get; set; }
 
-    public static CardAction[] ActionsRegistry =
+    public CardAction(string name, int index)
     {
-        new CardAction()
-        {
-            Name = "recruit",
-            Index = 0,
-        },
-        new CardAction()
-        {
-            Name = "walk",
-            Index = 1,
-        },
-        new CardAction()
-        {
-            Name = "sail",
-            Index = 2,
-        },
-        new CardAction()
-        {
-            Name = "build",
-            Index = 3,
-        },
-        new CardAction()
-        {
-            Name = "battle",
-            Index = 4,
-        },
+        Name = name;
+        Index = index;
+    }
+
+    public CardAction() { }
+
+    public static readonly CardAction[] ActionsRegistry =
+    {
+        new CardAction("recruit", 0),
+        new CardAction("walk", 1),
+        new CardAction("sail", 2),
+        new CardAction("build", 3),
+        new CardAction("battle", 4)
     };
 }

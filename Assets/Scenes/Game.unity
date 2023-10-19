@@ -1444,7 +1444,7 @@ MonoBehaviour:
   _cardPanel: {fileID: 1771199148}
   _cardHolder: {fileID: 5142496766922939016, guid: 3c5bd3dd2f1013341a935a41b6abe5eb, type: 3}
   _playerPanel: {fileID: 1646308110}
-  _playerHolder: {fileID: 3307749883987613847, guid: e2f5874dd0c07d749894b0b37f11e98d, type: 3}
+  _prefabPlayerHolder: {fileID: 3307749883987613847, guid: e2f5874dd0c07d749894b0b37f11e98d, type: 3}
   _cover: {fileID: 546905238}
   _selectAction: {fileID: 1714579597}
   _board: {fileID: 1679220959}
