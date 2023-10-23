@@ -13,26 +13,32 @@ public class Land
     #region Internal
 	public string Name { get; private set; }
     public float[] Position { get; private set; }
-    public short Scale { get; private set; }
     [JsonProperty("Boundaires")]
     public Boundaries Boundaries { get; private set; } = new Boundaries();
+    public bool IsHome { get; private set; } = false;
+    public short Scale { get; private set; } = 1;
+    public float[] HomeIconOffset { get; private set; } = new float[2];
+    public short HomeIconScale { get; private set; } = 1;
     public string TexturePath { get; set; }
-	#endregion
+    #endregion
 
-    public Dictionary<Player, uint> ArmiesPresence { get; private set; }
+    public Dictionary<Player, uint> ArmiesPresence { get; private set; } = new Dictionary<Player, uint>();
     public Player HasCity { get; set; }
     public Image LandObj { get; set; }
     public Player Owner
     {
-        get => ArmiesPresence.Aggregate((a, b) => a.Value > b.Value ? a : b).Key;
+        get => ArmiesPresence.Count > 0 ? ArmiesPresence.Aggregate((a, b) => a.Value > b.Value ? a : b).Key : null;
     }
 
-	public Land(string name, float[] position, short scale, Boundaries boundaries)
+    public Land(string name, float[] position, Boundaries boundaries, short scale=1, bool isHome=false, float[] homeIconOffset=null, short homeIconScale=1)
     {
         Name = name;
         Position = position;
-        Scale = scale;
         Boundaries = boundaries;
+        Scale = scale;
+        IsHome = isHome;
+        HomeIconOffset = homeIconOffset ?? new float[2];
+        HomeIconScale = homeIconScale;
     }
 
     public override string ToString() => Name;

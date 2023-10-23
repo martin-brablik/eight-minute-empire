@@ -13,4 +13,12 @@ public abstract class Player
 	public uint Score { get; private set; }
 
 	public enum Stat { NAME, SCORE, ARMIES, CITIES, COINS }
+
+	private GameController _controller;
+
+	public void RecruitArmy(Land land, uint count)
+	{
+		_controller.UpdatePlayerStat(this, Stat.ARMIES, (p) => p.Armies -= count);
+		land.ArmiesPresence[this] += count;
+	}
 }

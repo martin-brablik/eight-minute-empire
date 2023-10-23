@@ -15,17 +15,18 @@ public class GameController : MonoBehaviour
 
     [SerializeField] private GameUI _view;
     [SerializeField] private GameLoop _gameLoop;
-    private Game Game { get; set; }
-    public Map GameMap { get => Game.GameMap; }
+    private Game _game { get; set; }
+    public Map GameMap { get => _game.GameMap; }
     public Player ActivePlayer { get => _gameLoop.ActivePlayer; }
-    public Player[] Players { get => Game.Players; }
+    public Player[] Players { get => _game.Players; }
+    public Land[] Lands { get => _game.GameMap.Lands; }
 
 
     public delegate object StatSetter(Player player);
 
     private GameController()
     {
-        Game = GamePreloader.Instance.Game;
+        _game = GamePreloader.Instance.Game;
     }
 
     private void Awake()
@@ -61,12 +62,12 @@ public class GameController : MonoBehaviour
 
         _view.HideBiddingScreen();
         OrderPlayers();
-        UpdatePlayerStat<short>(winner, Player.Stat.COINS, p => p.Coins -= _gameLoop.Bids[p]);
+        UpdatePlayerStat(winner, Player.Stat.COINS, p => p.Coins -= _gameLoop.Bids[p]);
         _gameLoop.EndRound();
         _view.Cover(false);
     }
 
-    public void UpdatePlayerStat<T>(Player player, Player.Stat stat, StatSetter setter)
+    public void UpdatePlayerStat(Player player, Player.Stat stat, StatSetter setter)
     {
         var value = setter(player);
         _view.UpdatePlayerStat(player, stat, value.ToString());
@@ -74,17 +75,12 @@ public class GameController : MonoBehaviour
 
     public Player NextPlayer()
     {
-        var nextPlayer = Game.Players[_gameLoop.NextPlayer()];
+        var nextPlayer = _game.Players[_gameLoop.NextPlayer()];
 
         if(GetCurrentPlayersMove() is not null && GetCurrentPlayersMove().Action is not null)
             GetCurrentPlayersMove().Action.sourcePlayer = nextPlayer;
 
         return nextPlayer;
-    }
-
-    public void RegenerateCard(System.Random cardGenerator, short cardPrice, int cardIndex)
-    {
-        
     }
 
     public Card GenerateCard(System.Random cardGenerator, short cardPrice)
@@ -148,8 +144,8 @@ public class GameController : MonoBehaviour
 
     public void OrderPlayers()
     {
-        Game.OrderPlayers(_gameLoop.Bids);
-        _view.DrawPlayers(Game.Players);
+        _game.OrderPlayers(_gameLoop.Bids);
+        _view.DrawPlayers(_game.Players);
     }
 
     public void PickCard(Card card)
@@ -157,7 +153,7 @@ public class GameController : MonoBehaviour
         if (ActivePlayer.Coins < card.Price)
             return;
 
-        UpdatePlayerStat<short>(ActivePlayer, Player.Stat.COINS, (p) => p.Coins -= card.Price);
+        UpdatePlayerStat(ActivePlayer, Player.Stat.COINS, (p) => p.Coins -= card.Price);
 
         if (card.CardActions.Length > 1)
         {
@@ -182,34 +178,41 @@ public class GameController : MonoBehaviour
 
     public void OnSourceLandSelected(Land selectedLand)
     {
-        _view.MarkLandSelected(selectedLand, false);
-        var move = GetCurrentPlayersMove();
-        var action = move.Action;
-        var sourceLands = action.sourceLands;
-        sourceLands.Push(selectedLand);
-        GetCurrentPlayersMove().Action.sourceLands.Push(selectedLand);
+        if(GetCurrentPlayersMove().Action.Count <= 0)          
+            return;
 
-        print("count: " + GetCurrentPlayersMove().Action.Count);
-        if (GetCurrentPlayersMove().Action.Index == 1 || GetCurrentPlayersMove().Action.Index == 2) // pøesunout armády - vybrat cíl
+        if(GetCurrentPlayersMove().Action.Index == 0)
+        {
+            if(selectedLand.Owner == ActivePlayer || selectedLand.IsHome)
+            {
+                _view.MarkLandSelected(selectedLand, false);
+                GetCurrentPlayersMove().Action.sourceLands.Push(selectedLand);
+                print("count: " + GetCurrentPlayersMove().Action.Count);
+
+                if (--GetCurrentPlayersMove().Action.Count == 0)
+                    ToggleControls(false);
+            }
+        }
+
+        if (GetCurrentPlayersMove().Action.Index == 1 || GetCurrentPlayersMove().Action.Index == 2) // move, sail - vybrat cíl
             InitiateSelectingStage(2);
-        else if(GetCurrentPlayersMove().Action.Count <= 0) // ostatní akce - vybrat území kterých se akce dotkne
+        else if(GetCurrentPlayersMove().Action.Index == 3)// postavit mìsto
         {
             //ToggleControls(false);
         }
-        else // postavit mìsto
+        else if(GetCurrentPlayersMove().Action.Index == 4) // battle
         {
-            //ToggleControls(false);
-        }
 
-        GetCurrentPlayersMove().Action.Count--;
+        }
     }
 
     public void OnTargetLandSelected(Land selectedLand)
     {
-        ToggleControls(false);
         _view.MarkLandSelected(selectedLand, true);
         print("selectedTargetLand: " + selectedLand.Name);
         GetCurrentPlayersMove().Action.targetLands.Push(selectedLand);
-        _gameLoop.SelectingStage++;
+
+        if (GetCurrentPlayersMove().Action.Count >= 0) // move, sail
+            InitiateSelectingStage(1);
     }
 }

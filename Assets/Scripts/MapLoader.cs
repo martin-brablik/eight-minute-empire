@@ -5,12 +5,16 @@ using System.IO;
 using System;
 using Newtonsoft.Json;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Drawing.Printing;
 
 public class MapLoader
 {
     public static string MapsLocation = MapsLocation = Path.Combine(Application.persistentDataPath, "Maps").Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 
 	private delegate GameObject DrawMethod(Image image, string texturePath, Transform parent, Land land = null);
+
+	private const float c_homeIconSize = 16;
 
 	private static Texture2D ReadTextureData(string file)
 	{
@@ -34,14 +38,13 @@ public class MapLoader
 		return texture;
 	}
 
-	private static Sprite LoadSpriteFromFile(string file)
+	private static Sprite LoadSpriteFromFile(string file, Func<string, Texture2D> spriteLoader)
 	{
 		var pixelsPerUnit = 100.0f;
-		var texture = ReadTextureData(file);
+		var texture = spriteLoader(file);
 		var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), Vector2.zero, pixelsPerUnit);
 		return sprite;
 	}
-
 
 	public static IEnumerable<Map> LoadMaps()
     {
@@ -55,7 +58,7 @@ public class MapLoader
 			var links = JsonConvert.DeserializeObject<List<GraphLinkFoundation>>(linksJson);
 			var nodes = lands.Select(l => new GraphNode<Land>(l)).ToList();
 			var graph = new Graph<Land>(nodes, links.Select(l => GraphLink<Land>.BuildLink(l, nodes, l.IsOversea)).ToList());
-			var preview = LoadSpriteFromFile(Path.Combine(dirname, "preview.png"));
+			var preview = LoadSpriteFromFile(Path.Combine(dirname, "preview.png"), ReadTextureData);
 			var map = new Map(Path.GetFileName(dirname), lands, graph, preview);
 
 			foreach (var land in map.Lands)
@@ -78,6 +81,20 @@ public class MapLoader
 		foreach (var land in map.Lands)
 		{
 			var landObj = Draw(land.Name, land.TexturePath, DrawLand, landsRoot.transform, land, typeof(CanvasRenderer), typeof(Image));
+			if(land.IsHome)
+			{
+				var homeIconSprite = LoadSpriteFromFile("home", Resources.Load<Texture2D>);
+
+				if(homeIconSprite != null)
+				{
+                    var homeIcon = new GameObject().AddComponent<Image>();
+                    homeIcon.transform.SetParent(landObj.transform);
+                    homeIcon.color = new Color(0, 0, 0);
+                    homeIcon.GetComponent<RectTransform>().anchoredPosition = new Vector2(land.HomeIconOffset[0], land.HomeIconOffset[1]);
+                    homeIcon.GetComponent<RectTransform>().sizeDelta = new Vector2(c_homeIconSize * land.HomeIconScale, c_homeIconSize * land.HomeIconScale);
+                    homeIcon.sprite = homeIconSprite;
+                }
+            }
 
 			foreach (var area in land.Boundaries.Areas)
 			{
@@ -89,7 +106,7 @@ public class MapLoader
 
 		GameObject DrawLand(Image image, string texturePath, Transform parent, Land land)
 		{
-			image.sprite = LoadSpriteFromFile(texturePath);
+			image.sprite = LoadSpriteFromFile(texturePath, ReadTextureData);
 			image.rectTransform.anchorMin = Vector2.up;
 			image.rectTransform.anchorMax = Vector2.up;
 			image.rectTransform.pivot = Vector2.one / 2;
@@ -102,7 +119,7 @@ public class MapLoader
 
 		GameObject DrawCover(Image image, string texturePath, Transform parent, Land land = null)
 		{
-			image.sprite = LoadSpriteFromFile(texturePath);
+			image.sprite = LoadSpriteFromFile(texturePath, ReadTextureData);
 			image.rectTransform.anchorMin = Vector2.zero;
 			image.rectTransform.anchorMax = Vector2.one;
 			image.rectTransform.pivot = Vector2.one / 2;

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System;
 using UnityEngine.UI;
 using System.Collections;
+using static UnityEditor.Experimental.GraphView.GraphView;
 
 public class GameLoop : MonoBehaviour
 {
@@ -30,6 +31,7 @@ public class GameLoop : MonoBehaviour
 		PreparePlayers();
 		Deck = _controller.DealCards();
 		_controller.ToggleControls(false);
+		DivideLands();
 		InitiateBidding();
 	}
 
@@ -53,40 +55,30 @@ public class GameLoop : MonoBehaviour
         if (Input.GetMouseButtonDown(0) && _controller.IsSelectingAllowed && ActivePlayer is LocalPlayer)
 		{
 			print(SelectingStage);
-			if(SelectingStage == 1)
+			if (SelectingStage == 1)
 			{
-				try
-				{
-					var selectedLand = GetClickedLand();
+				var selectedLand = GetClickedLand();
 
-					_controller.OnSourceLandSelected(selectedLand);
-					print("stage1");
-				}
-				catch (Exception ex)
-				{
-					print(ex.Message);
-					print(ex.StackTrace);
-				}
+				_controller.OnSourceLandSelected(selectedLand);
+				print("stage1");
 			}
-			else if(SelectingStage == 2)
+			else if (SelectingStage == 2)
 			{
-                try
-                {
-                    var selectedLand = GetClickedLand();
+				var selectedLand = GetClickedLand();
 
-                    _controller.OnTargetLandSelected(selectedLand);
-					print("stage2");
-                }
-                catch (Exception ex)
-				{
-					print(ex.StackTrace);
-				}
-            }
+				_controller.OnTargetLandSelected(selectedLand);
+				print("stage2");
+			}
 		}
-
 	}
 
-	private void InitiateBidding()
+    public void DivideLands()
+    {
+        for (var i = 0; i < _controller.Players.Length; i++)
+            _controller.Lands[i].ArmiesPresence.Add(_controller.Players[i], 0);
+    }
+
+    private void InitiateBidding()
 	{
 		var random = new System.Random();
 
@@ -117,6 +109,12 @@ public class GameLoop : MonoBehaviour
 				2 => 14
 			};
 		}
+	}
+
+	private void PlaceFirstArmies()
+	{
+		foreach(var player in _controller.Players)
+			player.RecruitArmy(_controller.la)
 	}
 
 	public void PlayTurn(Card card)
